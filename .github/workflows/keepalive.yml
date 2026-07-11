@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   ping:
@@ -25,6 +24,19 @@ jobs:
           curl -fsS --max-time 60 --retry 3 --retry-delay 20 "$URL/api/health"
           echo "Site is awake."
 
-      # GitHub pauses cron workflows in repos with no commits for 60 days;
-      # this step makes a tiny automatic commit before that happens.
-      - uses: gautamkrishnar/keepalive-workflow@v2
+      # GitHub pauses cron workflows in repos with no commits for 60 days.
+      # If the last commit is older than 50 days, push an empty one to reset
+      # the clock. Uses only git — no third-party actions.
+      - name: Keep the schedule alive
+        run: |
+          LAST=$(git log -1 --format=%ct)
+          CUTOFF=$(date -d '50 days ago' +%s)
+          if [ "$LAST" -lt "$CUTOFF" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "keepalive: reset 60-day scheduler clock"
+            git push
+            echo "Pushed keepalive commit."
+          else
+            echo "Recent commit exists — no reset needed."
+          fi
